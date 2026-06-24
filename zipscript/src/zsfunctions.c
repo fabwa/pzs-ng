@@ -39,6 +39,7 @@ struct USER   **user;
 struct GROUP  **group;
 #endif
 
+void vd_log(const char *, va_list);
 
 void
 vd_log(const char *fmt, va_list ap)
@@ -56,7 +57,7 @@ vd_log(const char *fmt, va_list ap)
 
 #if ( debug_altlog == TRUE )
 	getcwd(debugpath, PATH_MAX);
-	snprintf(debugname, PATH_MAX, "%s/%s/debug",
+	safe_snprintf(debugname, PATH_MAX, "%s/%s/debug",
 	         storage, debugpath);
 #endif
 
@@ -104,19 +105,18 @@ d_log_ext(char *fname, char *fmt, ...)
 	if (fmt == NULL)
 		return;
 #if ( debug_mode == TRUE )
+	va_start(ap, fmt);
+	
 	int res = snprintf(buffer, sizeof(buffer), "%s: %s", fname, fmt);
-	if (res >= sizeof(buffer)) {
+	if (res < 0 || (size_t) res >= sizeof(buffer)) {
 		new_fmt = fmt;
 	} else {
 		new_fmt = buffer;
 	}
 
-    va_start(ap, new_fmt);
 	vd_log(new_fmt, ap);
 	va_end(ap);
-
 #endif
-	return;
 }
 /*
  * create_missing - create a <filename>-missing 0byte file.
@@ -1494,7 +1494,7 @@ sfv_compare_size(char *fileext, off_t fsize)
 		}
 	}
 
-	if (!(l = l - fsize) > 0)
+	if ((!(l = l - fsize)) > 0)
 		l = 0;
 
 	closedir(dir);
@@ -1642,7 +1642,7 @@ getrelname(GLOBAL *g)
 	d_log("\t\t\tg->l.path:\t%s\n", g->l.path);
 
 	if (subc) {
-		snprintf(g->v.misc.release_name, PATH_MAX, "%s/%s", path[0], path[1]);
+		safe_snprintf(g->v.misc.release_name, PATH_MAX, "%s/%s", path[0], path[1]);
 		strlcpy(g->l.link_source, g->l.path, PATH_MAX);
 		strlcpy(g->l.link_target, path[1], PATH_MAX);
 		if (matchpath(incomplete_generic1_path, g->l.path)) {
@@ -1799,6 +1799,23 @@ ng_realloc(void *mempointer, int memsize, int zero_it, int exit_on_error, struct
 		bzero(mempointer, memsize);
 	return mempointer;
 }
+
+void *
+ng_malloc(int memsize, int zero_it, int exit_on_error)
+{
+	void *mempointer; 
+	mempointer = malloc(memsize);
+
+	if (mempointer == NULL) {
+		d_log("ng_malloc: malloc failed: %s\n", strerror(errno));
+		if (exit_on_error) {
+			exit(EXIT_FAILURE);
+		}
+	} else if (zero_it)
+		bzero(mempointer, memsize);
+	return mempointer;
+}
+
 
 void *
 ng_realloc2(void *mempointer, int memsize, int zero_it, int exit_on_error, int zero_pointer)
